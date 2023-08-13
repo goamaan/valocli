@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	tls "github.com/refraction-networking/utls"
 )
@@ -48,25 +47,6 @@ func parseUriTokens(uri string) (*UriTokens, error) {
 		IdToken:     idToken,
 		ExpiresIn:   expiresIn,
 	}, nil
-}
-
-func parseCookies(cookies []string, subs string) (string, error) {
-	for _, cookie := range cookies {
-		if strings.Contains(cookie, subs) {
-			return cookie, nil
-		}
-	}
-
-	return "", fmt.Errorf("could not find %s", subs)
-}
-
-func parseAuthCookie(cookies []string) string {
-	var finalCookie string
-	for _, cookie := range cookies {
-		finalCookie += cookie + "; "
-	}
-
-	return finalCookie
 }
 
 func dialTls(network, addr string) (net.Conn, error) {

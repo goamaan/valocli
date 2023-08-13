@@ -6,15 +6,6 @@
 // 	"strings"
 // )
 
-// const (
-// 	AuthCookiesUrl     = "https://auth.riotgames.com/api/v1/authorization"
-// 	AuthRequestUrl     = "https://auth.riotgames.com/api/v1/authorization"
-// 	MultiFactorAuthUrl = "https://auth.riotgames.com/api/v1/authorization"
-// 	CookieReAuthUrl    = "https://auth.riotgames.com/authorize?redirect_uri=https%3A%2F%2Fplayvalorant.com%2Fopt_in&client_id=play-valorant-web-prod&response_type=token%20id_token&nonce=1"
-// 	EntitlementUrl     = "https://entitlements.auth.riotgames.com/api/token/v1"
-// 	PlayerInfo         = "https://auth.riotgames.com/userinfo"
-// )
-
 // func Login(username string, password string) {
 // 	payload := strings.NewReader("{\"client_id\":\"play-valorant-web-prod\",\"nonce\":\"1\",\"redirect_uri\":\"https://playvalorant.com/opt_in\",\"response_type\":\"token id_token\", \"scope\": \"account openid\"}")
 // 	req, _ := http.NewRequest("POST", AuthCookiesUrl, payload)
@@ -66,9 +57,25 @@ import (
 	tls "github.com/refraction-networking/utls"
 )
 
+const (
+	AuthCookiesUrl     = "https://auth.riotgames.com/api/v1/authorization"
+	AuthRequestUrl     = "https://auth.riotgames.com/api/v1/authorization"
+	MultiFactorAuthUrl = "https://auth.riotgames.com/api/v1/authorization"
+	CookieReAuthUrl    = "https://auth.riotgames.com/authorize?redirect_uri=https%3A%2F%2Fplayvalorant.com%2Fopt_in&client_id=play-valorant-web-prod&response_type=token%20id_token&nonce=1"
+	EntitlementUrl     = "https://entitlements.auth.riotgames.com/api/token/v1"
+	PlayerInfo         = "https://auth.riotgames.com/userinfo"
+)
+
+type UserResponse struct {
+	UserId string `json:"sub"`
+}
+
+type EntitlementsResponse struct {
+	EntitlementsToken string `json:"entitlements_token"`
+}
+
 type Client struct {
 	httpClient *http.Client
-	authCookie string
 }
 
 type UriTokens struct {
@@ -118,13 +125,14 @@ func New(proxy *url.URL) *Client {
 }
 
 func (c *Client) Authorize(username, password string) (*UriTokens, error) {
-	cookie, err := c.getPreAuth()
+	err := c.getPreAuth()
 	if err != nil {
 		return nil, err
 	}
 
 	bodyMap := map[string]any{"password": password, "type": "auth", "username": username}
 	body, err := json.Marshal(bodyMap)
+
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +141,6 @@ func (c *Client) Authorize(username, password string) (*UriTokens, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Add("Cookie", cookie)
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
@@ -145,8 +151,6 @@ func (c *Client) Authorize(username, password string) (*UriTokens, error) {
 	if err = json.NewDecoder(res.Body).Decode(&loginBody); err != nil {
 		return nil, err
 	}
-
-	c.authCookie = parseAuthCookie(res.Header["Set-Cookie"])
 
 	if loginBody.Type == "response" {
 		return parseUriTokens(loginBody.Response.Parameters.Uri)
@@ -174,8 +178,6 @@ func (c *Client) SubmitTwoFactor(code string) (*UriTokens, error) {
 		return nil, err
 	}
 
-	req.Header.Add("Cookie", c.authCookie)
-
 	res, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -200,10 +202,12 @@ func (c *Client) SubmitTwoFactor(code string) (*UriTokens, error) {
 	}
 }
 
-func (c *Client) getPreAuth() (string, error) {
+func (c *Client) GetUserId() {}
+
+func (c *Client) getPreAuth() error {
 	nonce, err := GenerateNonce()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	bodyMap := map[string]any{
@@ -217,20 +221,20 @@ func (c *Client) getPreAuth() (string, error) {
 
 	body, err := json.Marshal(bodyMap)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	req, err := createNewRequest("POST", "https://auth.riotgames.com/api/v1/authorization", bytes.NewBuffer(body))
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	res, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	defer res.Body.Close()
 
-	return parseCookies(res.Header["Set-Cookie"], "asid")
+	return nil
 }
