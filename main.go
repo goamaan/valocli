@@ -24,30 +24,50 @@ const (
 func main() {
 	client := core.New(nil)
 
-	config := readFromConfig()
-	authData := readFromSaveData()
-
-	if authData == nil {
-		err := client.Authorize(config.Username, config.Password)
-
+	config, saveData := readFromConfig()
+	client.AuthData = saveData
+	if saveData != nil {
+		// ensure that saved auth data actually works
+		err := client.SetUserId()
 		if err != nil {
-			if err == core.ErrorRiotMultifactor {
-				fmt.Println("Seems like you have Multi factor set up. Enter the code sent to your email: ")
-				var multifactorCode string
-				fmt.Scan(&multifactorCode)
-
-				authData, err = client.MultiFactorAuth(multifactorCode)
-			} else {
-				panic(err)
-			}
+			fmt.Printf("Got error: %s. Previous tokens have expired. Logging in again...\n", err)
+		} else {
+			saveAuthSaveData(getSaveDataPath(), client.AuthData)
+			cliLoop(client)
+			return
 		}
-
 	}
 
-	fmt.Println(authData)
+	err := client.Authorize(config.Username, config.Password)
+	if err != nil {
+		if err == core.ErrorRiotMultifactor {
+			fmt.Println("Seems like you have Multi factor set up. Enter the code sent to your email: ")
+			var multifactorCode string
+			fmt.Scan(&multifactorCode)
+
+			err = client.MultiFactorAuth(multifactorCode)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			panic(err)
+		}
+	}
+
+	saveAuthSaveData(getSaveDataPath(), client.AuthData)
+	cliLoop(client)
 }
 
-func readFromConfig() AuthConfiguration {
+func cliLoop(c *core.Client) {
+	fmt.Println("authData: ", c.AuthData)
+	var response string
+	for {
+		fmt.Scan(&response)
+		fmt.Println(response)
+	}
+}
+
+func readFromConfig() (AuthConfiguration, *core.AuthSaveData) {
 	var config AuthConfiguration
 	configPath := getConfigPath()
 
@@ -59,19 +79,23 @@ func readFromConfig() AuthConfiguration {
 		userAuthInput(&config)
 
 		saveConfiguration(configPath, config)
-	} else {
-		// Configuration file exists, read file
-		config = loadConfiguration(configPath)
-		fmt.Printf("Use previously saved username (%s) and password?: Y/n - ", config.Username)
-		var usePrevious string
-		fmt.Scan(&usePrevious)
-		if usePrevious != "Y" && usePrevious != "y" {
-			userAuthInput(&config)
-			saveConfiguration(configPath, config)
-		}
+		return config, nil
+	}
+	// Configuration file exists, read file
+	config = loadConfiguration(configPath)
+	fmt.Printf("Use previously saved username (%s) and password?: Y/n - ", config.Username)
+	var usePrevious string
+	fmt.Scan(&usePrevious)
+
+	if usePrevious == "n" || usePrevious == "N" {
+		userAuthInput(&config)
+		saveConfiguration(configPath, config)
+		return config, nil
 	}
 
-	return config
+	// using previous username, password, so try saved auth data
+	saveData := readFromSaveData()
+	return config, saveData
 }
 
 func userAuthInput(config *AuthConfiguration) {
@@ -83,18 +107,19 @@ func userAuthInput(config *AuthConfiguration) {
 
 func readFromSaveData() *core.AuthSaveData {
 	var saveData *core.AuthSaveData
-	configPath := getSaveDataPath()
+	saveDataPath := getSaveDataPath()
 
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+	if _, err := os.Stat(saveDataPath); os.IsNotExist(err) {
 		return nil
 	}
 
-	// Configuration file exists, read file
-	saveData = loadAuthSaveData(configPath)
+	// Save data file exists, read file
+	saveData = loadAuthSaveData(saveDataPath)
 	oneHourAgo := time.Now().Add(-time.Hour)
 
 	// Compare SavedAt time with one hour ago
 	if saveData.SavedAt.Before(oneHourAgo) {
+		// discard old save data if it's been more than an hour
 		fmt.Println("Last login was more than an hour ago, trying to login again...")
 		return nil
 	}

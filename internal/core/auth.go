@@ -31,7 +31,7 @@ type EntitlementsResponse struct {
 
 type Client struct {
 	httpClient *http.Client
-	authData   *AuthSaveData
+	AuthData   *AuthSaveData
 }
 
 type AuthSaveData struct {
@@ -121,10 +121,9 @@ func (c *Client) Authorize(username, password string) error {
 			return err
 		}
 
-		c.authData.AuthTokens = *tokens
-		c.authData.SavedAt = time.Now()
+		c.AuthData.AuthTokens = *tokens
+		c.AuthData.SavedAt = time.Now()
 		c.SetUserId()
-		c.SetEntitlementToken()
 
 		return nil
 	} else if loginBody.Type == "auth" {
@@ -166,10 +165,9 @@ func (c *Client) MultiFactorAuth(code string) error {
 		if err != nil {
 			return err
 		}
-		c.authData.AuthTokens = *tokens
-		c.authData.SavedAt = time.Now()
+		c.AuthData.AuthTokens = *tokens
+		c.AuthData.SavedAt = time.Now()
 		c.SetUserId()
-		c.SetEntitlementToken()
 
 		return nil
 	} else if loginBody.Type == "auth" {
@@ -184,17 +182,17 @@ func (c *Client) MultiFactorAuth(code string) error {
 	}
 }
 
-func (c *Client) SetUserId() {
+func (c *Client) SetUserId() error {
 	req, err := createNewRequest("GET", UserInfoUrl, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authData.AuthTokens.AccessToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.AuthData.AuthTokens.AccessToken))
 	resp, err := c.httpClient.Do(req)
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	defer resp.Body.Close()
@@ -202,24 +200,24 @@ func (c *Client) SetUserId() {
 
 	err = json.NewDecoder(resp.Body).Decode(body)
 	if err != nil {
-		return
+		return err
 	}
 
-	c.authData.UserId = body.UserId
-	c.SetEntitlementToken()
+	c.AuthData.UserId = body.UserId
+	return c.SetEntitlementToken()
 }
 
-func (c *Client) SetEntitlementToken() {
+func (c *Client) SetEntitlementToken() error {
 	req, err := createNewRequest("POST", EntitlementUrl, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.authData.AuthTokens.AccessToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.AuthData.AuthTokens.AccessToken))
 	resp, err := c.httpClient.Do(req)
 
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	defer resp.Body.Close()
@@ -227,12 +225,13 @@ func (c *Client) SetEntitlementToken() {
 
 	err = json.NewDecoder(resp.Body).Decode(body)
 	if err != nil {
-		return
+		return err
 	}
 
 	entitlementsToken := body.EntitlementsToken
 
-	c.authData.EntitlementToken = entitlementsToken
+	c.AuthData.EntitlementToken = entitlementsToken
+	return nil
 }
 
 func (c *Client) getPreAuth() error {
