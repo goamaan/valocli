@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/goamaan/valocli/internal/core"
 )
@@ -15,30 +16,35 @@ type AuthConfiguration struct {
 }
 
 const (
-	ConfigFileDirectory = ".valocli"
-	ConfigFilePath      = "valocli_config.json"
+	ConfigFileDirectory  = ".valocli"
+	ConfigFilePath       = "valocli_config.json"
+	AuthSaveDataFilePath = "valocli_auth_save.json"
 )
 
 func main() {
 	client := core.New(nil)
 
 	config := readFromConfig()
+	authData := readFromSaveData()
 
-	data, err := client.Authorize(config.Username, config.Password)
+	if authData == nil {
+		err := client.Authorize(config.Username, config.Password)
 
-	if err != nil {
-		if err == core.ErrorRiotMultifactor {
-			fmt.Println("Seems like you have Multi factor set up. Enter the code sent to your email: ")
-			var multifactorCode string
-			fmt.Scan(&multifactorCode)
+		if err != nil {
+			if err == core.ErrorRiotMultifactor {
+				fmt.Println("Seems like you have Multi factor set up. Enter the code sent to your email: ")
+				var multifactorCode string
+				fmt.Scan(&multifactorCode)
 
-			data, err = client.SubmitTwoFactor(multifactorCode)
-		} else {
-			panic(err)
+				authData, err = client.MultiFactorAuth(multifactorCode)
+			} else {
+				panic(err)
+			}
 		}
+
 	}
 
-	fmt.Println(data)
+	fmt.Println(authData)
 }
 
 func readFromConfig() AuthConfiguration {
@@ -73,6 +79,28 @@ func userAuthInput(config *AuthConfiguration) {
 	fmt.Scan(&config.Username)
 	fmt.Println("Please enter your password:")
 	fmt.Scan(&config.Password)
+}
+
+func readFromSaveData() *core.AuthSaveData {
+	var saveData *core.AuthSaveData
+	configPath := getSaveDataPath()
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil
+	}
+
+	// Configuration file exists, read file
+	saveData = loadAuthSaveData(configPath)
+	oneHourAgo := time.Now().Add(-time.Hour)
+
+	// Compare SavedAt time with one hour ago
+	if saveData.SavedAt.Before(oneHourAgo) {
+		fmt.Println("Last login was more than an hour ago, trying to login again...")
+		return nil
+	}
+
+	fmt.Printf("Attempting to use previous login tokens...")
+	return saveData
 }
 
 func saveConfiguration(path string, config AuthConfiguration) {
@@ -111,10 +139,16 @@ func loadConfiguration(path string) AuthConfiguration {
 
 func getConfigPath() string {
 	configDir := getConfigDirectory()
-
 	configPath := filepath.Join(configDir, ConfigFilePath)
 
 	return configPath
+}
+
+func getSaveDataPath() string {
+	configDir := getConfigDirectory()
+	saveDataPath := filepath.Join(configDir, AuthSaveDataFilePath)
+
+	return saveDataPath
 }
 
 func getConfigDirectory() string {
@@ -127,4 +161,38 @@ func getConfigDirectory() string {
 	configDir := filepath.Join(homeDir, ConfigFileDirectory)
 
 	return configDir
+}
+
+func saveAuthSaveData(path string, authData *core.AuthSaveData) {
+	data, err := json.MarshalIndent(authData, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshaling auth save data:", err)
+		return
+	}
+
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.MkdirAll(getConfigDirectory(), 0700)
+	}
+
+	err = os.WriteFile(path, data, 0644)
+	if err != nil {
+		fmt.Println("Error writing auth save data:", err)
+	}
+}
+
+func loadAuthSaveData(path string) *core.AuthSaveData {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("Error reading auth save data:", err)
+		return nil
+	}
+
+	var config *core.AuthSaveData
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		fmt.Println("Error unmarshaling auth save data:", err)
+		return nil
+	}
+
+	return config
 }
