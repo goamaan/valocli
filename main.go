@@ -25,8 +25,8 @@ func main() {
 	client := core.New(nil)
 
 	config, saveData := readFromConfig()
-	client.AuthData = saveData
 	if saveData != nil {
+		client.AuthData = saveData
 		// ensure that saved auth data actually works
 		err := client.SetUserId()
 		if err != nil {

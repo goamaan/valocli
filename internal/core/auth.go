@@ -84,7 +84,8 @@ func New(proxy *url.URL) *Client {
 		transport.Proxy = http.ProxyURL(proxy)
 	}
 
-	return &Client{httpClient: &http.Client{Transport: transport, Jar: cookieJar}}
+	return &Client{httpClient: &http.Client{Transport: transport, Jar: cookieJar},
+		AuthData: &AuthSaveData{AuthTokens: UriTokens{}, EntitlementToken: "", UserId: "", SavedAt: time.Now()}}
 }
 
 func (c *Client) Authorize(username, password string) error {
@@ -159,6 +160,8 @@ func (c *Client) MultiFactorAuth(code string) error {
 	if err = json.NewDecoder(res.Body).Decode(&loginBody); err != nil {
 		return err
 	}
+
+	fmt.Println("loginbody: ", loginBody)
 
 	if loginBody.Type == "response" {
 		tokens, err := parseUriTokens(loginBody.Response.Parameters.Uri)
