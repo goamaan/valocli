@@ -67,9 +67,15 @@ func cliLoop(c *core.Client) {
 	for {
 		fmt.Println("what do you want to do - enter the corresponding number")
 		fmt.Println("Check Store - 1")
+		fmt.Println("Check Wallet - 2")
+		fmt.Println("Quit - 0")
 		fmt.Scan(&response)
 		if response == "1" {
 			store.GetStorefront(c)
+		} else if response == "2" {
+			store.GetWallet(c)
+		} else if response == "0" {
+			break
 		}
 	}
 }
