@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/goamaan/valocli/internal/core"
+	"github.com/goamaan/valocli/internal/player"
 	"github.com/goamaan/valocli/internal/store"
 )
 
@@ -68,12 +70,27 @@ func cliLoop(c *core.Client) {
 		fmt.Println("what do you want to do - enter the corresponding number")
 		fmt.Println("Check Store - 1")
 		fmt.Println("Check Wallet - 2")
+		fmt.Println("Check MMR (Rank Data) - 3")
 		fmt.Println("Quit - 0")
 		fmt.Scan(&response)
 		if response == "1" {
-			store.GetStorefront(c)
+			err := store.GetStorefront(c)
+			if err != nil {
+				log.Fatalf("error getting store: %s", err)
+				break
+			}
 		} else if response == "2" {
-			store.GetWallet(c)
+			err := store.GetWallet(c)
+			if err != nil {
+				log.Fatalf("error getting wallet: %s", err)
+				break
+			}
+		} else if response == "3" {
+			err := player.GetPlayerMMR(c)
+			if err != nil {
+				log.Fatalf("error getting player mmr: %s", err)
+				break
+			}
 		} else if response == "0" {
 			break
 		}
