@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -30,8 +31,9 @@ type EntitlementsResponse struct {
 }
 
 type Client struct {
-	httpClient *http.Client
+	HttpClient *http.Client
 	AuthData   *AuthSaveData
+	Region     string
 }
 
 type AuthSaveData struct {
@@ -84,8 +86,10 @@ func New(proxy *url.URL) *Client {
 		transport.Proxy = http.ProxyURL(proxy)
 	}
 
-	return &Client{httpClient: &http.Client{Transport: transport, Jar: cookieJar},
-		AuthData: &AuthSaveData{AuthTokens: UriTokens{}, EntitlementToken: "", UserId: "", SavedAt: time.Now()}}
+	return &Client{
+		HttpClient: &http.Client{Transport: transport, Jar: cookieJar},
+		AuthData:   &AuthSaveData{AuthTokens: UriTokens{}, EntitlementToken: "", UserId: "", SavedAt: time.Now()},
+		Region:     ""}
 }
 
 func (c *Client) Authorize(username, password string) error {
@@ -106,7 +110,7 @@ func (c *Client) Authorize(username, password string) error {
 		return err
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -151,7 +155,7 @@ func (c *Client) MultiFactorAuth(code string) error {
 		return err
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -160,8 +164,6 @@ func (c *Client) MultiFactorAuth(code string) error {
 	if err = json.NewDecoder(res.Body).Decode(&loginBody); err != nil {
 		return err
 	}
-
-	fmt.Println("loginbody: ", loginBody)
 
 	if loginBody.Type == "response" {
 		tokens, err := parseUriTokens(loginBody.Response.Parameters.Uri)
@@ -192,7 +194,7 @@ func (c *Client) SetUserId() error {
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.AuthData.AuthTokens.AccessToken))
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
 
 	if err != nil {
 		return err
@@ -217,7 +219,7 @@ func (c *Client) SetEntitlementToken() error {
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.AuthData.AuthTokens.AccessToken))
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.HttpClient.Do(req)
 
 	if err != nil {
 		return err
@@ -262,7 +264,7 @@ func (c *Client) getPreAuth() error {
 		return err
 	}
 
-	res, err := c.httpClient.Do(req)
+	res, err := c.HttpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -270,4 +272,22 @@ func (c *Client) getPreAuth() error {
 	defer res.Body.Close()
 
 	return nil
+}
+
+func (c *Client) RequestWithAuth(method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header = http.Header{
+		"Cache-Control":           {"no-cache"},
+		"Content-Type":            {"application/json"},
+		"Cookie":                  {""},
+		"User-Agent":              {RiotUserAgent},
+		"Authorization":           {fmt.Sprintf("Bearer %s", c.AuthData.AuthTokens.AccessToken)},
+		"X-Riot-Entitlements-JWT": {c.AuthData.EntitlementToken},
+	}
+
+	return req, nil
 }

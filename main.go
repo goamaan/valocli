@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/goamaan/valocli/internal/core"
+	"github.com/goamaan/valocli/internal/store"
 )
 
 type AuthConfiguration struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Region   string `json:"region"`
 }
 
 const (
@@ -25,6 +27,7 @@ func main() {
 	client := core.New(nil)
 
 	config, saveData := readFromConfig()
+	client.Region = config.Region
 	if saveData != nil {
 		client.AuthData = saveData
 		// ensure that saved auth data actually works
@@ -56,14 +59,18 @@ func main() {
 
 	saveAuthSaveData(getSaveDataPath(), client.AuthData)
 	cliLoop(client)
+	return
 }
 
 func cliLoop(c *core.Client) {
-	fmt.Println("authData: ", c.AuthData)
 	var response string
 	for {
+		fmt.Println("what do you want to do - enter the corresponding number")
+		fmt.Println("Check Store - 1")
 		fmt.Scan(&response)
-		fmt.Println(response)
+		if response == "1" {
+			store.GetStorefront(c)
+		}
 	}
 }
 
@@ -71,12 +78,13 @@ func readFromConfig() (AuthConfiguration, *core.AuthSaveData) {
 	var config AuthConfiguration
 	configPath := getConfigPath()
 
-	fmt.Println("Welcome to the Valorant CLI:")
+	fmt.Println("VALORANT helper:")
 	fmt.Println()
 
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		// Configuration file doesn't exist, prompt for username and password
 		userAuthInput(&config)
+		userRegionInput(&config)
 
 		saveConfiguration(configPath, config)
 		return config, nil
@@ -89,6 +97,7 @@ func readFromConfig() (AuthConfiguration, *core.AuthSaveData) {
 
 	if usePrevious == "n" || usePrevious == "N" {
 		userAuthInput(&config)
+		userRegionInput(&config)
 		saveConfiguration(configPath, config)
 		return config, nil
 	}
@@ -103,6 +112,20 @@ func userAuthInput(config *AuthConfiguration) {
 	fmt.Scan(&config.Username)
 	fmt.Println("Please enter your password:")
 	fmt.Scan(&config.Password)
+}
+
+func userRegionInput(config *AuthConfiguration) {
+	fmt.Println("What region was your account made in? Enter the corresponding keyword")
+	fmt.Println("North America, Brazil, Latin America - na")
+	fmt.Println("Europe - eu")
+	fmt.Println("Asia Pacific - ap")
+	fmt.Println("Korea - kr")
+	var response string
+	fmt.Scan(&response)
+	if response != "na" && response != "eu" && response != "ap" && response != "kr" {
+		response = "na"
+	}
+	config.Region = response
 }
 
 func readFromSaveData() *core.AuthSaveData {
@@ -124,7 +147,7 @@ func readFromSaveData() *core.AuthSaveData {
 		return nil
 	}
 
-	fmt.Printf("Attempting to use previous login tokens...")
+	fmt.Println("Attempting to use previous login tokens...")
 	return saveData
 }
 
