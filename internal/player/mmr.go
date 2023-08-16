@@ -3,7 +3,6 @@ package player
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/goamaan/valocli/internal/core"
 )
@@ -85,7 +84,21 @@ func GetPlayerMMR(c *core.Client) error {
 		return err
 	}
 
-	log.Println("player: ", playerMMRBody)
+	PrintMMR(playerMMRBody)
+
+	return nil
+}
+
+func PrintMMR(p *PlayerMMRResponse) error {
+	tierMap, err := core.GetCompetitiveTiers()
+	if err != nil {
+		return err
+	}
+
+	currentRank := tierMap[p.LatestCompetitiveUpdate.TierAfterUpdate]
+	rr := p.LatestCompetitiveUpdate.RankedRatingAfterUpdate
+
+	fmt.Printf("Your current rank: %s - %d/100 RR\n", currentRank, rr)
 
 	return nil
 }

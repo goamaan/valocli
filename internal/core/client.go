@@ -22,6 +22,20 @@ type ManifestData struct {
 	BuildDate         time.Time `json:"buildDate"`
 }
 
+type CompetitiveTierResponse struct {
+	Status int                           `json:"status"`
+	Data   []CompetitiveTierResponseData `json:"data"`
+}
+
+type CompetitiveTierResponseData struct {
+	Uuid            string `json:"uuid"`
+	AssetObjectName string `json:"assetObjectName"`
+	Tiers           []struct {
+		Tier     int    `json:"tier"`
+		TierName string `json:"tierName"`
+	} `json:"tiers"`
+}
+
 func GetClientVersion() (*string, error) {
 	req, err := http.NewRequest(http.MethodGet, "https://valorant-api.com/v1/version", nil)
 	if err != nil {
@@ -42,4 +56,32 @@ func GetClientVersion() (*string, error) {
 	}
 
 	return &versionBody.Data.RiotClientVersion, nil
+}
+
+func GetCompetitiveTiers() (map[int]string, error) {
+	req, err := http.NewRequest(http.MethodGet, "https://valorant-api.com/v1/competitivetiers", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	tiersBody := new(CompetitiveTierResponse)
+	if err = json.NewDecoder(res.Body).Decode(&tiersBody); err != nil {
+		return nil, err
+	}
+
+	tierMap := make(map[int]string)
+
+	for _, tier := range tiersBody.Data[len(tiersBody.Data)-1].Tiers {
+		tierMap[tier.Tier] = tier.TierName
+	}
+
+	return tierMap, nil
 }
