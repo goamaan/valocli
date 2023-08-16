@@ -21,3 +21,5 @@ Auth credentials (username, password) are store in the users home directory in `
 ### Contributing
 
 feel free to open a PR if there's a feature you want to add
+
+also feel free to make my code cleaner/better (still improving at Go :D)
